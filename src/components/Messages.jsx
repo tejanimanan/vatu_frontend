@@ -239,8 +239,8 @@ export default function Messages() {
 
   // Show chat area full screen when a user or conversation is selected
   return (
-    <div className="flex flex-col max-w-md mx-auto w-full h-[80vh] pt-4 pb-2 px-1 bg-[#181818]">
-      <div className="flex-1 flex flex-col h-full">
+    <div className="flex flex-col max-w-md mx-auto w-full h-screen bg-[#181818]">
+      <div className="flex-1 flex flex-col h-0">
         {selectedId && conversation ? (
           <div className="flex flex-col h-full bg-[#181818] rounded-lg relative">
             {/* Header */}
@@ -277,8 +277,8 @@ export default function Messages() {
               })}
               <div ref={messagesEndRef} />
             </div>
-            {/* Input Bar */}
-            <div className="absolute bottom-0 left-0 right-0 p-2 bg-[#181818] flex items-center border-t border-gray-800 rounded-b-lg">
+            {/* Input Bar - make it fixed to the bottom, no extra margin/padding */}
+            <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md p-2 bg-[#181818] flex items-center border-t border-gray-800 z-50">
               <button className="text-pink-500 text-2xl mr-2"><FaCamera /></button>
               <input
                 type="text"
