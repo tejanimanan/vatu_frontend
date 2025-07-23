@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { FaSmile, FaPaperclip, FaPaperPlane, FaArrowLeft, FaPhone, FaVideo, FaCamera } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { get, post } from '../utils/api';
+import { io } from 'socket.io-client';
+
+const socket = io('https://vatu-backend.onrender.com'); // Use your backend URL
 
 export default function Messages() {
   const [selectedId, setSelectedId] = useState(null);
@@ -16,6 +19,9 @@ export default function Messages() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUser, setTypingUser] = useState(null);
+  const [seenMessages, setSeenMessages] = useState({}); // { messageId: true }
 
   useEffect(() => {
     get('/users/me').then(setCurrentUser).catch(() => setCurrentUser(null));
@@ -23,7 +29,38 @@ export default function Messages() {
     get('/users').then(setAllUsers).catch(() => setAllUsers([]));
     // Mark all as read when opening the page
     post('/conversations/mark-all-read');
-  }, []);
+    if (currentUser?._id) {
+      socket.emit('user_online', currentUser._id);
+    }
+    socket.on('online_users', (users) => {
+      setOnlineUsers(users);
+    });
+    socket.on('typing', ({ conversationId, from }) => {
+      if (selectedId && conversationId === selectedId) {
+        setTypingUser(from);
+      }
+    });
+    socket.on('stop_typing', ({ conversationId, from }) => {
+      if (selectedId && conversationId === selectedId) {
+        setTypingUser(null);
+      }
+    });
+    socket.on('message_seen', ({ conversationId, messageId }) => {
+      setSeenMessages(prev => ({ ...prev, [messageId]: true }));
+    });
+    socket.on('receive_message', (data) => {
+      // Only update if the message is for this conversation
+      // For demo, just refresh all conversations
+      get('/conversations').then(setConversations).catch(() => setConversations([]));
+    });
+    return () => {
+      socket.off('online_users');
+      socket.off('typing');
+      socket.off('stop_typing');
+      socket.off('message_seen');
+      socket.off('receive_message');
+    };
+  }, [currentUser, selectedId]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -60,6 +97,30 @@ export default function Messages() {
   };
   const goToHome = () => navigate("/");
 
+  // Typing indicator logic
+  const handleInputChange = (e) => {
+    setMessage(e.target.value);
+    if (selectedId && currentUser && otherUser) {
+      if (e.target.value) {
+        socket.emit('typing', { conversationId: selectedId, from: currentUser._id, to: otherUser._id });
+      } else {
+        socket.emit('stop_typing', { conversationId: selectedId, from: currentUser._id, to: otherUser._id });
+      }
+    }
+  };
+
+  // Mark messages as seen when opening a conversation
+  useEffect(() => {
+    if (selectedId && conversation && currentUser && otherUser) {
+      conversation.messages.forEach(msg => {
+        if (msg.from !== currentUser._id && !seenMessages[msg._id]) {
+          socket.emit('message_seen', { conversationId: selectedId, messageId: msg._id, from: currentUser._id, to: otherUser._id });
+          setSeenMessages(prev => ({ ...prev, [msg._id]: true }));
+        }
+      });
+    }
+  }, [selectedId, conversation, currentUser, otherUser]);
+
   const handleSendMessage = async () => {
     if (!message.trim()) return;
 
@@ -69,7 +130,17 @@ export default function Messages() {
     try {
       if (selectedId) {
         // Add to existing conversation
-        await post(`/conversations/${selectedId}/messages`, { text: message, time: new Date().toLocaleTimeString() });
+        const res = await post(`/conversations/${selectedId}/messages`, { text: message, time: new Date().toLocaleTimeString() });
+        // Emit socket event for real-time update
+        socket.emit('send_message', {
+          conversationId: selectedId,
+          text: message,
+          from: currentUser?._id,
+          to: otherUser?._id,
+          messageId: res?._id,
+          time: new Date().toLocaleTimeString(),
+        });
+        socket.emit('stop_typing', { conversationId: selectedId, from: currentUser._id, to: otherUser._id });
       } else if (chatUser) {
         // Create new conversation
         const newConversation = await post('/conversations', {
@@ -78,6 +149,16 @@ export default function Messages() {
         });
         setSelectedId(newConversation._id); // Switch to the new conversation
         setChatUser(null);
+        // Emit socket event for real-time update
+        socket.emit('send_message', {
+          conversationId: newConversation._id,
+          text: message,
+          from: currentUser?._id,
+          to: chatUser._id,
+          messageId: newConversation.messages?.[0]?._id,
+          time: new Date().toLocaleTimeString(),
+        });
+        socket.emit('stop_typing', { conversationId: newConversation._id, from: currentUser._id, to: chatUser._id });
       }
       
       // Refresh all conversations
@@ -193,7 +274,7 @@ export default function Messages() {
                 placeholder="Message..."
                 className="flex-1 rounded-full border border-gray-700 px-4 py-2 text-base focus:outline-none bg-[#232323] text-white mr-2"
                 value={message}
-                onChange={e => setMessage(e.target.value)}
+                onChange={handleInputChange}
                 disabled={loading}
               />
               <button className="text-white text-2xl mr-2"><FaPaperclip /></button>
