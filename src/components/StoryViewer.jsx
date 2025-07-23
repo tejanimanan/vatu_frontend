@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import Draggable from "react-draggable";
 import { post as apiPost } from '../utils/api';
 
 const EMOJIS = ["🔥", "😍", "👏", "😂", "😮", "😭"];
@@ -21,9 +22,9 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [emojiAnim, setEmojiAnim] = useState(null);
+  const [stickers, setStickers] = useState([]);
   const touchStartX = useRef(null);
 
-  // Progress bar animation for current story
   useEffect(() => {
     setProgress(0);
     timerRef.current = setInterval(() => {
@@ -35,11 +36,10 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
         }
         return p + 2;
       });
-    }, 50); // 2.5s total
+    }, 50);
     return () => clearInterval(timerRef.current);
   }, [story, onNext]);
 
-  // Tap navigation
   const handleTap = (e) => {
     const { left, width } = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - left;
@@ -50,26 +50,22 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
     }
   };
 
-  // Swipe navigation
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
   };
   const handleTouchEnd = (e) => {
     if (touchStartX.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-    if (deltaX > 50) {
-      onPrev && onPrev();
-    } else if (deltaX < -50) {
-      onNext && onNext();
-    }
+    if (deltaX > 50) onPrev?.();
+    else if (deltaX < -50) onNext?.();
     touchStartX.current = null;
   };
 
-  // Emoji quick reaction
   const handleEmoji = (emoji) => {
     setEmojiAnim(emoji);
     setTimeout(() => setEmojiAnim(null), 1000);
     setComment(emoji);
+    setStickers([...stickers, { id: Date.now(), emoji }]);
     handleAddComment(null, emoji);
   };
 
@@ -99,11 +95,10 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Top gradient overlay */}
       <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-black/80 to-transparent z-10" />
-      {/* Bottom gradient overlay */}
       <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-black/80 to-transparent z-10" />
-      {/* Story group progress bars */}
+
+      {/* Progress bars */}
       <div className="absolute top-0 left-0 w-full flex z-20 gap-1 px-2 pt-2">
         {Array.from({ length: totalStories }).map((_, idx) => (
           <div
@@ -113,6 +108,7 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
           />
         ))}
       </div>
+
       {/* Top bar */}
       <div className="absolute top-4 left-4 z-20 flex items-center">
         <img src={avatar} alt={username} className="w-10 h-10 rounded-full border-2 border-white mr-3" />
@@ -120,26 +116,34 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
         <span className="text-gray-300 text-xs ml-3">{timeAgo(createdAt)}</span>
       </div>
       <button className="absolute top-4 right-4 text-white text-3xl z-20" onClick={e => { e.stopPropagation(); onClose(); }}>&times;</button>
+
       {/* Story image */}
       <img src={storyImage} alt="story" className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-lg z-10" />
-      {/* Animated emoji reaction */}
+
+      {/* Draggable Caption */}
+      {caption && (
+        <Draggable>
+          <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 text-white font-semibold text-base z-30 px-2 bg-black/50 rounded-md cursor-move">
+            {caption}
+          </div>
+        </Draggable>
+      )}
+
+      {/* Drag Emoji Stickers */}
+      {stickers.map(sticker => (
+        <Draggable key={sticker.id}>
+          <div className="absolute text-4xl z-30 cursor-move select-none">{sticker.emoji}</div>
+        </Draggable>
+      ))}
+
+      {/* Animated emoji */}
       {emojiAnim && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none animate-bounce text-6xl select-none">
+        <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none animate-bounce text-6xl select-none">
           {emojiAnim}
         </div>
       )}
-      {/* Caption */}
-      {caption && (
-        <div className="absolute bottom-32 left-0 w-full text-center z-20">
-          <span className="text-white text-base px-4">{caption}</span>
-        </div>
-      )}
-      {/* Viewers list placeholder */}
-      <div className="absolute bottom-8 left-4 z-20 text-xs text-gray-300 bg-black/40 px-2 py-1 rounded-full">
-        {/* TODO: Replace with real viewers */}
-        Viewed by: (coming soon)
-      </div>
-      {/* Bottom bar: emoji reactions and reply */}
+
+      {/* Emoji buttons and input */}
       <div className="absolute bottom-8 left-0 w-full flex flex-col items-center z-20">
         <div className="flex gap-3 mb-2">
           {EMOJIS.map(e => (
@@ -160,4 +164,4 @@ export default function StoryViewer({ story, onClose, onNext, onPrev, timeAgo: c
       </div>
     </div>
   );
-} 
+}

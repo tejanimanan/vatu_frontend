@@ -34,7 +34,7 @@ function AppLayout({ activeTab, setActiveTab, onAddClick }) {
   return (
     <>
       {showHeader && <Header />}
-      <div className="pt-16 pb-12">
+      <div className="pt-16 pb-12 pt-16 pb-12 bg-[#000] min-h-screen text-white">
         <Outlet /> {/* This renders the current page! */}
       </div>
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#181818] border-t border-gray-800 flex justify-around">

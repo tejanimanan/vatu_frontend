@@ -36,3 +36,10 @@
 .animate-fadeIn {
   animation: fadeIn 0.3s;
 }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
