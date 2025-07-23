@@ -49,9 +49,13 @@ export default function Messages() {
       setSeenMessages(prev => ({ ...prev, [messageId]: true }));
     });
     socket.on('receive_message', (data) => {
-      // Only update if the message is for this conversation
-      // For demo, just refresh all conversations
-      get('/conversations').then(setConversations).catch(() => setConversations([]));
+      if (data.conversationId && data.text) {
+        setConversations(prev => prev.map(conv =>
+          conv._id === data.conversationId
+            ? { ...conv, messages: [...conv.messages, { ...data, from: data.from }] }
+            : conv
+        ));
+      }
     });
     return () => {
       socket.off('online_users');
@@ -128,9 +132,11 @@ export default function Messages() {
     setError("");
 
     try {
+      let newMsg = null;
       if (selectedId) {
         // Add to existing conversation
         const res = await post(`/conversations/${selectedId}/messages`, { text: message, time: new Date().toLocaleTimeString() });
+        newMsg = res;
         // Emit socket event for real-time update
         socket.emit('send_message', {
           conversationId: selectedId,
@@ -161,9 +167,14 @@ export default function Messages() {
         socket.emit('stop_typing', { conversationId: newConversation._id, from: currentUser._id, to: chatUser._id });
       }
       
-      // Refresh all conversations
-      const updated = await get('/conversations');
-      setConversations(updated);
+      // Update only the current conversation in state
+      if (newMsg && selectedId) {
+        setConversations(prev => prev.map(conv =>
+          conv._id === selectedId
+            ? { ...conv, messages: [...conv.messages, newMsg] }
+            : conv
+        ));
+      }
       setMessage("");
 
     } catch (err) {
@@ -275,6 +286,12 @@ export default function Messages() {
                 className="flex-1 rounded-full border border-gray-700 px-4 py-2 text-base focus:outline-none bg-[#232323] text-white mr-2"
                 value={message}
                 onChange={handleInputChange}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !loading && message.trim()) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 disabled={loading}
               />
               <button className="text-white text-2xl mr-2"><FaPaperclip /></button>
